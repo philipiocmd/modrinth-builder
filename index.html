@@ -7,58 +7,298 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
 <style>
+:root {
+  color-scheme: dark;
+  --bg: #0b100f;
+  --surface: #121a17;
+  --surface-2: #18231e;
+  --surface-3: #202d27;
+  --line: #2a3a32;
+  --text: #edf5ef;
+  --muted: #9aaca1;
+  --accent: #8be0a6;
+  --accent-strong: #53c77c;
+  --orange: #ffb86b;
+  --red: #ff7777;
+  --purple: #c59aff;
+  --radius: 16px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
 body {
-    font-family: Arial;
-    max-width: 1000px;
-    margin: 30px auto;
-    padding: 20px;
+  width: min(100% - 40px, 1040px);
+  margin: 0 auto;
+  min-height: 100vh;
+  padding: 42px 0 64px;
+  color: var(--text);
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(83,199,124,.13), transparent 36rem),
+    radial-gradient(ellipse at 92% 8%, rgba(129,91,190,.10), transparent 32rem),
+    var(--bg);
 }
-
-input, select, button {
-    padding: 8px;
-    margin: 5px;
+body > h1 {
+  max-width: 1040px;
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: clamp(2rem, 4vw, 3rem);
+  letter-spacing: -0.055em;
+  line-height: 1.08;
 }
-
-.modRow {
-    display:flex;
-    gap:10px;
-    margin-bottom:10px;
+body > h1::after {
+  content: "Build, check and collect your Modrinth mods in one place.";
+  display: block;
+  margin-top: 13px;
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 450;
+  letter-spacing: 0;
 }
-
+body > label {
+  display: inline-block;
+  margin-top: 28px;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: .86rem;
+  font-weight: 650;
+}
+body > select { margin-right: 18px; }
+select, input, button {
+  font: inherit;
+}
+input, select {
+  min-height: 44px;
+  padding: 10px 13px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+  transition: border-color .18s, box-shadow .18s, background .18s;
+}
+input:focus, select:focus {
+  border-color: var(--accent-strong);
+  box-shadow: 0 0 0 3px rgba(83,199,124,.15);
+}
+input::placeholder { color: #73877b; }
+button {
+  min-height: 42px;
+  padding: 10px 16px;
+  color: #08130c;
+  background: var(--accent);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: transform .16s, background .16s, border-color .16s, box-shadow .16s;
+}
+button:hover {
+  background: #a5edb9;
+  transform: translateY(-1px);
+  box-shadow: 0 7px 20px rgba(83,199,124,.14);
+}
+button:active { transform: translateY(0); }
+hr {
+  width: 100%;
+  max-width: 1040px;
+  margin-top: 30px;
+  margin-bottom: 30px;
+  border: 0;
+  border-top: 1px solid rgba(154,172,161,.16);
+}
+h3 {
+  max-width: 1040px;
+  margin-top: 30px;
+  margin-bottom: 14px;
+  font-size: 1.15rem;
+  letter-spacing: -.02em;
+}
+#searchBox { width: min(650px, calc(100% - 115px)); }
+#searchResults, #modList, #out, #treeView {
+  width: 100%;
+  max-width: 1040px;
+  margin-top: 14px;
+}
+#searchResults:empty, #out:empty, #treeView:empty { display: none; }
 .mod {
-    border:1px solid #ccc;
-    padding:10px;
-    margin:10px 0;
-    border-radius:6px;
+  padding: 16px 18px;
+  margin: 11px 0;
+  background: linear-gradient(145deg, rgba(24,35,30,.98), rgba(18,26,23,.98));
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
 }
-
-.good { border-left:5px solid green; }
-.depColor { border-left:5px solid orange; background:#fff8e6; }
-.warnColor { border-left:5px solid red; background:#ffe6e6; }
-.fallbackDepColor { border-left:5px solid purple; background:#f3e8ff; }
-
-.tree-good { color: green; }
-.tree-dep { color: orange; font-weight: bold; }
-.tree-warn { color: red; font-weight: bold; }
-.tree-fallback-dep { color: purple; font-weight: bold; }
-
+#searchResults .mod {
+  cursor: pointer;
+  transition: border-color .18s, transform .18s, background .18s;
+}
+#searchResults .mod:hover {
+  border-color: #568b68;
+  background: var(--surface-3);
+  transform: translateY(-2px);
+}
+#searchResults .mod b, #out .mod b { font-size: 1rem; }
+#searchResults small { display: inline-block; margin-top: 6px; color: var(--muted); line-height: 1.5; }
+.modRow {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+}
+.modRow input { flex: 1; min-width: 0; }
+.modRow button {
+  min-width: 44px;
+  color: #ffdede;
+  background: rgba(255,119,119,.12);
+  border-color: rgba(255,119,119,.25);
+}
+.modRow button:hover { background: rgba(255,119,119,.22); }
+.good { border-left: 4px solid var(--accent-strong); }
+.depColor { border-left: 4px solid var(--orange); background: rgba(255,184,107,.07); }
+.warnColor { border-left: 4px solid var(--red); background: rgba(255,119,119,.07); }
+.fallbackDepColor { border-left: 4px solid var(--purple); background: rgba(197,154,255,.08); }
+.tree-good { color: var(--accent); }
+.tree-dep { color: var(--orange); font-weight: 700; }
+.tree-warn { color: var(--red); font-weight: 700; }
+.tree-fallback-dep { color: var(--purple); font-weight: 700; }
 input.warnInput {
-    border: 2px solid red;
-    background: #ffe6e6;
+  border-color: var(--red);
+  background: rgba(255,119,119,.08);
+}
+.fileBox {
+  width: 100%;
+  max-width: 1040px;
+  padding: 20px;
+  margin: 12px auto;
+  background: rgba(18,26,23,.72);
+  border: 1px dashed #496052;
+  border-radius: var(--radius);
+}
+.fileBox small { display: inline-block; margin-top: 10px; color: var(--muted); }
+#txtInput { max-width: 100%; }
+#out .mod button { margin-top: 12px; }
+#out > hr { margin: 20px 0 10px; }
+#treeView {
+  padding: 18px;
+  background: rgba(18,26,23,.72);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  line-height: 1.8;
+  overflow-x: auto;
+}
+@media (max-width: 640px) {
+  body { padding: 28px 15px 48px; }
+  body > h1 { font-size: 2.15rem; }
+  body > label { display: block; margin-top: 18px; }
+  body > select { width: 100%; margin: 0 0 8px; }
+  #searchBox { width: 100%; margin: 5px 0 8px; }
+  #searchBox + button { width: 100%; }
+  .modRow { align-items: stretch; }
+  .modRow input { width: 100%; }
+  .fileBox { padding: 15px; }
+}
+#promoBanner {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative;
+    z-index: 99999;
+    width: calc(100% - 36px);
+    max-width: 900px;
+    margin: 15px auto 24px;
+}
+.brandMark { max-width: 1040px; margin: 0 auto 14px; color: var(--accent); font-size: .72rem; font-weight: 850; letter-spacing: .17em; }\n.brandDot { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 14px rgba(139,224,166,.7); vertical-align: 1px; }\n
+/* Classic version navigation */
+.classic-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+  margin: 0 0 24px 0;
+  padding: 10px 15px;
+  color: var(--text);
+  background: linear-gradient(135deg, #1b2922, #121a17);
+  border: 1px solid #3b5947;
+  border-radius: 11px;
+  box-shadow: 0 5px 18px rgba(0, 0, 0, .22);
+  font-size: .88rem;
+  font-weight: 750;
+  line-height: 1.2;
+  text-decoration: none;
+  transition: color .18s ease, background .18s ease, border-color .18s ease,
+              box-shadow .18s ease, transform .18s ease;
+}
+.classic-nav:hover {
+  color: #08130c;
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 7px 22px rgba(83, 199, 124, .2);
+  transform: translateY(-2px);
+}
+.classic-nav-icon {
+  color: var(--accent);
+  font-size: 1.05rem;
+  transition: color .18s ease, transform .18s ease;
+}
+.classic-nav:hover .classic-nav-icon { color: #08130c; transform: translateX(-2px); }
+.classic-nav-arrow { opacity: .7; font-size: .8rem; }
+@media (max-width: 640px) {
+  .classic-nav { margin-bottom: 20px; }
 }
 
-.fileBox {
-    border:1px dashed #aaa;
-    padding:10px;
-    margin:10px 0;
-    background:#fafafa;
-}
 </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Audiowide&display=swap"
+      rel="stylesheet"
+    />
 </head>
 
 <body>
+<div id="promoBanner" style="
+    background-color: rgba(67, 17, 85, 0.95);
+    border: 2px solid #ff99ff;
+    border-radius: 12px;
+    padding: 12px 20px;
+    color: white;
+    font-family: 'Audiowide', sans-serif;
+    font-size: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+">
+    <span>Built by Philipiocmd — Check out my other projects at</span>
+    <a href="https://philipiocmd.github.io"
+       target="_blank"
+       rel="noopener noreferrer"
+       style="color:#ff99ff;text-decoration:underline;">
+       philipiocmd.github.io ↗
+    </a>
+</div>
+<div id="promoBanner" style="
+    background-color: rgba(67, 17, 85, 0.95);
+    border: 2px solid #ff99ff;
+    border-radius: 12px;
+    padding: 12px 20px;
+    color: white;
+    font-family: 'Audiowide', sans-serif;
+    font-size: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+">
+    <a href="./classic.html"
+       rel="noopener noreferrer"
+       style="color:#ff99ff;text-decoration:underline;">
+       Classic Version ↗
+    </a>
+</div>
 
-<h1>Modrinth Modpack Builder Pro</h1>
+
+<div class="brandMark"><span class="brandDot"></span> MODRINTH TOOLKIT</div><h1>Modrinth Modpack Builder Pro</h1>
 
 <label>Minecraft Version:</label>
 <select id="mcVersion"></select>
