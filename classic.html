@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Modrinth Modpack Builder Pro</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<style>
+body {
+    font-family: Arial;
+    max-width: 1000px;
+    margin: 30px auto;
+    padding: 20px;
+}
+
+input, select, button {
+    padding: 8px;
+    margin: 5px;
+}
+
+.modRow {
+    display:flex;
+    gap:10px;
+    margin-bottom:10px;
+}
+
+.mod {
+    border:1px solid #ccc;
+    padding:10px;
+    margin:10px 0;
+    border-radius:6px;
+}
+
+.good { border-left:5px solid green; }
+.depColor { border-left:5px solid orange; background:#fff8e6; }
+.warnColor { border-left:5px solid red; background:#ffe6e6; }
+.fallbackDepColor { border-left:5px solid purple; background:#f3e8ff; }
+
+.tree-good { color: green; }
+.tree-dep { color: orange; font-weight: bold; }
+.tree-warn { color: red; font-weight: bold; }
+.tree-fallback-dep { color: purple; font-weight: bold; }
+
+input.warnInput {
+    border: 2px solid red;
+    background: #ffe6e6;
+}
+
+.fileBox {
+    border:1px dashed #aaa;
+    padding:10px;
+    margin:10px 0;
+    background:#fafafa;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Modrinth Modpack Builder Pro</h1>
+
+<label>Minecraft Version:</label>
+<select id="mcVersion"></select>
+
+<label>Loader:</label>
+<select id="loader"></select>
+
+<hr>
+
+<h3>Search Mods</h3>
+<input id="searchBox" placeholder="Search Modrinth...">
+<button onclick="searchMods()">Search</button>
+<div id="searchResults"></div>
+
+<hr>
+<hr>
+
+<h3>📄 Import TXT</h3>
+<div class="fileBox">
+    <input type="file" id="txtInput" accept=".txt">
+    <button onclick="loadTxtFile()">Load TXT File</button><br>
+    <small>One Modrinth link per line</small>
+</div>
+
+<hr>
+<h3>Mods</h3>
+<div id="modList"></div>
+<button onclick="addMod()">+ Add Mod</button>
+
+<br><br>
+
+<h3>Actions</h3>
+<button onclick="scan()">Scan Mods</button>
+<button onclick="downloadAll()">Download</button>
+<button onclick="exportTxt()">Export Mods (.txt)</button>
+
+<div id="out"></div>
+
+<h3>Dependency Tree</h3>
+<div id="treeView"></div>
+
+<script>
+
+let mods = [];
+let processed = new Set();
+let dependencyTree = {};
+
+/* ---------------- VERSION ---------------- */
+
+function versionToNum(v) {
+    const m = v.match(/(\d+)\.(\d+)(?:\.(\d+))?/);
+    if (!m) return 0;
+    return parseInt(m[1])*1e6 + parseInt(m[2])*1e3 + parseInt(m[3]||0);
+}
+
+/* ---------------- INIT ---------------- */
+
+async function init() {
+
+    const [v, l] = await Promise.all([
+        fetch("https://api.modrinth.com/v2/tag/game_version"),
+        fetch("https://api.modrinth.com/v2/tag/loader")
+    ]);
+
+    const versions = await v.json();
+    const loaders = await l.json();
+
+    const mc = document.getElementById("mcVersion");
+    const loader = document.getElementById("loader");
+
+    loaders.forEach(x => {
+        const o = document.createElement("option");
+        o.value = x.name;
+        o.textContent = x.name;
+        loader.appendChild(o);
+    });
+
+    loader.value = "fabric";
+
+    versions.forEach(v => {
+        const o = document.createElement("option");
+        o.value = v.version;
+        o.textContent = v.version;
+        mc.appendChild(o);
+    });
+}
+
+init();
+
+/* ---------------- ADD MOD ---------------- */
+
+function addMod(val="", manual=false) {
+
+    const d = document.createElement("div");
+    d.className = "modRow";
+
+    const warn = manual ? "warnInput" : "";
+
+    d.innerHTML = `
+        <input class="${warn}" value="${val}" placeholder="Modrinth URL">
+        <button onclick="this.parentElement.remove()">X</button>
+    `;
+
+    document.getElementById("modList").appendChild(d);
+}
+
+addMod();
+
+/* ---------------- SEARCH ---------------- */
+
+async function searchMods() {
+
+    const q = document.getElementById("searchBox").value.trim();
+    if (!q) return;
+
+    const mc = document.getElementById("mcVersion").value;
+    const loader = document.getElementById("loader").value;
+
+    const facets = encodeURIComponent(JSON.stringify([
+        ["project_type:mod"],
+        [`versions:${mc}`],
+        [`categories:${loader}`]
+    ]));
+
+    const res = await fetch(
+        `https://api.modrinth.com/v2/search?query=${encodeURIComponent(q)}&facets=${facets}`
+    );
+
+    const data = await res.json();
+    renderSearch(data.hits || []);
+}
+
+function renderSearch(list) {
+
+    const box = document.getElementById("searchResults");
+    box.innerHTML = "";
+
+    list.forEach(mod => {
+
+        const div = document.createElement("div");
+        div.className = "mod";
+
+        div.innerHTML = `<b>${mod.title}</b><br><small>${mod.description || ""}</small>`;
+
+        div.onclick = () => addMod(`https://modrinth.com/mod/${mod.slug}`, true);
+
+        box.appendChild(div);
+    });
+}
+
+/* ---------------- CORE ---------------- */
+
+function getSlug(url) {
+    try {
+        return new URL(url).pathname.split("/").filter(Boolean).pop();
+    } catch {
+        return url;
+    }
+}
+
+async function fetchVersions(id) {
+    const r = await fetch(`https://api.modrinth.com/v2/project/${id}/version`);
+    return await r.json();
+}
+
+/* ---------------- PROCESS ---------------- */
+
+async function process(input, mc, loader, dependency=false, parent=null) {
+
+    const id = getSlug(input);
+    if (processed.has(id)) return;
+    processed.add(id);
+
+    const all = await fetchVersions(id);
+    if (!all?.length) return;
+
+    const mcNum = versionToNum(mc);
+
+    const filtered = all.filter(v =>
+        v.loaders?.includes(loader)
+    );
+
+    /* EXACT MATCH FIRST */
+    const exact = filtered.find(v =>
+        v.game_versions?.includes(mc)
+    );
+
+    /* FALLBACK ONLY LOWER VERSIONS */
+    const fallback = filtered
+        .filter(v =>
+            (v.game_versions || []).some(g => versionToNum(g) < mcNum)
+        )
+        .sort((a, b) =>
+            Math.max(...(b.game_versions||[]).map(versionToNum)) -
+            Math.max(...(a.game_versions||[]).map(versionToNum))
+        )[0];
+
+    const chosen = exact || fallback || all[0];
+    if (!chosen) return;
+
+    const file = chosen.files?.find(f => f.primary) || chosen.files?.[0];
+    if (!file) return;
+
+    const node = chosen.name;
+
+    const usedFallback = !exact;
+
+    let type =
+        dependency && usedFallback ? "fallbackDependency" :
+        dependency ? "dependency" :
+        usedFallback ? "warn" :
+        "good";
+
+    if (!dependencyTree[node]) {
+        dependencyTree[node] = {
+            children: [],
+            type
+        };
+    }
+
+    if (parent) {
+        if (!dependencyTree[parent]) {
+            dependencyTree[parent] = {
+                children: [],
+                type: "good"
+            };
+        }
+
+        if (!dependencyTree[parent].children.includes(node)) {
+            dependencyTree[parent].children.push(node);
+        }
+    }
+
+    if (!mods.some(m => m.projectId === chosen.project_id)) {
+        mods.push({
+            projectId: chosen.project_id,
+            slug: id,
+            name: chosen.name,
+            url: file.url,
+            dependency,
+            compatible: !!exact,
+            fallback: usedFallback
+        });
+    }
+
+    if (chosen.dependencies) {
+        for (const dep of chosen.dependencies) {
+            if (dep.dependency_type !== "required") continue;
+            if (!dep.project_id) continue;
+
+            await process(dep.project_id, mc, loader, true, node);
+        }
+    }
+}
+
+/* ---------------- SCAN ---------------- */
+
+async function scan() {
+
+    mods = [];
+    processed.clear();
+    dependencyTree = {};
+
+    const mc = document.getElementById("mcVersion").value;
+    const loader = document.getElementById("loader").value;
+
+    const inputs = [...document.querySelectorAll(".modRow input")]
+        .map(i => i.value.trim())
+        .filter(Boolean);
+
+    for (const i of inputs) {
+        await process(i, mc, loader);
+    }
+
+    render();
+    renderTree();
+}
+
+/* ---------------- RENDER ---------------- */
+
+function render() {
+
+    const out = document.getElementById("out");
+    out.innerHTML = "";
+
+    mods.forEach(m => {
+
+        const div = document.createElement("div");
+
+        if (m.dependency && m.fallback) {
+            div.className = "mod fallbackDepColor";
+        }
+        else if (m.dependency) {
+            div.className = "mod depColor";
+        }
+        else if (!m.compatible) {
+            div.className = "mod warnColor";
+        }
+        else {
+            div.className = "mod good";
+        }
+
+        div.innerHTML = `
+            <b>${m.name}</b><br>
+            ${m.dependency && m.fallback ? "Dependency (Fallback)" :
+              m.dependency ? "Dependency" :
+              m.compatible ? "Compatible" : "Fallback"}<br><br>
+            <button onclick="window.open('${m.url}')">Download</button>
+        `;
+
+        out.appendChild(div);
+    });
+
+    out.innerHTML += `<hr>Total: ${mods.length}`;
+}
+
+/* ---------------- TREE ---------------- */
+
+function renderTreeNode(name, depth=0, seen=new Set()) {
+
+    if (seen.has(name)) return "";
+    seen.add(name);
+
+    const node = dependencyTree[name] || { children: [], type: "good" };
+
+    let cls =
+        node.type === "fallbackDependency" ? "tree-fallback-dep" :
+        node.type === "dependency" ? "tree-dep" :
+        node.type === "warn" ? "tree-warn" :
+        "tree-good";
+
+    let html = `
+        <div class="${cls}" style="margin-left:${depth*20}px">
+            ${depth ? "└─ " : "<b>"}${name}${depth ? "" : "</b>"}
+        </div>
+    `;
+
+    for (const child of node.children || []) {
+        html += renderTreeNode(child, depth + 1, seen);
+    }
+
+    return html;
+}
+
+function renderTree() {
+
+    const box = document.getElementById("treeView");
+    box.innerHTML = "";
+
+    const children = new Set();
+
+    Object.values(dependencyTree).forEach(n =>
+        (n.children || []).forEach(c => children.add(c))
+    );
+
+    Object.keys(dependencyTree).forEach(root => {
+        if (!children.has(root)) {
+            box.innerHTML += renderTreeNode(root);
+        }
+    });
+}
+
+/* ---------------- DOWNLOAD ---------------- */
+
+function downloadAll() {
+    mods.forEach((m,i) =>
+        setTimeout(() => window.open(m.url), i*150)
+    );
+}
+
+/* ---------------- TXT IMPORT ---------------- */
+
+function loadTxtFile() {
+
+    const file = document.getElementById("txtInput").files[0];
+
+    if (!file) {
+        alert("Select a .txt file first");
+        return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = e => {
+
+        const lines = e.target.result
+            .split(/\r?\n/)
+            .map(x => x.trim())
+            .filter(line => {
+
+                if (!line) return false;
+
+                if (
+                    line.startsWith(
+                        "#Mod links with the names"
+                    )
+                ) {
+                    return false;
+                }
+
+                return true;
+            });
+
+        lines.forEach(line => addMod(line, true));
+
+        alert(`Imported ${lines.length} mods`);
+    };
+
+    reader.readAsText(file);
+}
+
+/* ---------------- TXT EXPORT ---------------- */
+
+function exportTxt() {
+
+    if (!mods.length) {
+        alert("Scan mods first.");
+        return;
+    }
+
+    const links = [
+        ...new Set(
+            mods.map(
+                m => `https://modrinth.com/mod/${m.slug}`
+            )
+        )
+    ];
+
+    const txt = [
+        "#Mod links with the names at the end are the mods downloaded. Mod links with random letters are dependencies",
+        "",
+        ...links
+    ].join("\n");
+
+    const blob = new Blob(
+        [txt],
+        { type: "text/plain" }
+    );
+
+    const a = document.createElement("a");
+
+    a.href = URL.createObjectURL(blob);
+    a.download = "modrinth-modlist.txt";
+
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    URL.revokeObjectURL(a.href);
+}
+
+</script>
+
+</body>
+</html>
