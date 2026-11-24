@@ -53,12 +53,43 @@ input.warnInput {
     margin:10px 0;
     background:#fafafa;
 }
+.pageHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+}
+
+.newVersionBtn {
+    display: inline-block;
+    padding: 10px 16px;
+    background: #202b24;
+    color: #ffffff;
+    border: 1px solid #39834f;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: bold;
+    text-decoration: none;
+    transition: 0.2s ease;
+    white-space: nowrap;
+}
+
+.newVersionBtn:hover {
+    background: #39834f;
+    transform: translateY(-2px);
+}
 </style>
 </head>
 
 <body>
 
-<h1>Modrinth Modpack Builder Pro</h1>
+<div class="pageHeader">
+    <h1>Modrinth Modpack Builder Pro</h1>
+
+    <a href="./index.html" class="newVersionBtn">
+        Go Back to New ↗
+    </a>
+</div>
 
 <label>Minecraft Version:</label>
 <select id="mcVersion"></select>
