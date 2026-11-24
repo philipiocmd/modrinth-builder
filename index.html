@@ -1,801 +1,1065 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Modrinth Modpack Builder Pro</title>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-
-<style>
-:root {
-  color-scheme: dark;
-  --bg: #0b100f;
-  --surface: #121a17;
-  --surface-2: #18231e;
-  --surface-3: #202d27;
-  --line: #2a3a32;
-  --text: #edf5ef;
-  --muted: #9aaca1;
-  --accent: #8be0a6;
-  --accent-strong: #53c77c;
-  --orange: #ffb86b;
-  --red: #ff7777;
-  --purple: #c59aff;
-  --radius: 16px;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-* { box-sizing: border-box; }
-body {
-  width: min(100% - 40px, 1040px);
-  margin: 0 auto;
-  min-height: 100vh;
-  padding: 42px 0 64px;
-  color: var(--text);
-  background:
-    radial-gradient(ellipse at 12% 0%, rgba(83,199,124,.13), transparent 36rem),
-    radial-gradient(ellipse at 92% 8%, rgba(129,91,190,.10), transparent 32rem),
-    var(--bg);
-}
-body > h1 {
-  max-width: 1040px;
-  margin-top: 0;
-  margin-bottom: 10px;
-  font-size: clamp(2rem, 4vw, 3rem);
-  letter-spacing: -0.055em;
-  line-height: 1.08;
-}
-body > h1::after {
-  content: "Build, check and collect your Modrinth mods in one place.";
-  display: block;
-  margin-top: 13px;
-  color: var(--muted);
-  font-size: 1rem;
-  font-weight: 450;
-  letter-spacing: 0;
-}
-body > label {
-  display: inline-block;
-  margin-top: 28px;
-  margin-bottom: 8px;
-  color: var(--muted);
-  font-size: .86rem;
-  font-weight: 650;
-}
-body > select { margin-right: 18px; }
-select, input, button {
-  font: inherit;
-}
-input, select {
-  min-height: 44px;
-  padding: 10px 13px;
-  color: var(--text);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  outline: none;
-  transition: border-color .18s, box-shadow .18s, background .18s;
-}
-input:focus, select:focus {
-  border-color: var(--accent-strong);
-  box-shadow: 0 0 0 3px rgba(83,199,124,.15);
-}
-input::placeholder { color: #73877b; }
-button {
-  min-height: 42px;
-  padding: 10px 16px;
-  color: #08130c;
-  background: var(--accent);
-  border: 1px solid transparent;
-  border-radius: 10px;
-  font-weight: 750;
-  cursor: pointer;
-  transition: transform .16s, background .16s, border-color .16s, box-shadow .16s;
-}
-button:hover {
-  background: #a5edb9;
-  transform: translateY(-1px);
-  box-shadow: 0 7px 20px rgba(83,199,124,.14);
-}
-button:active { transform: translateY(0); }
-hr {
-  width: 100%;
-  max-width: 1040px;
-  margin-top: 30px;
-  margin-bottom: 30px;
-  border: 0;
-  border-top: 1px solid rgba(154,172,161,.16);
-}
-h3 {
-  max-width: 1040px;
-  margin-top: 30px;
-  margin-bottom: 14px;
-  font-size: 1.15rem;
-  letter-spacing: -.02em;
-}
-#searchBox { width: min(650px, calc(100% - 115px)); }
-#searchResults, #modList, #out, #treeView {
-  width: 100%;
-  max-width: 1040px;
-  margin-top: 14px;
-}
-#searchResults:empty, #out:empty, #treeView:empty { display: none; }
-.mod {
-  padding: 16px 18px;
-  margin: 11px 0;
-  background: linear-gradient(145deg, rgba(24,35,30,.98), rgba(18,26,23,.98));
-  border: 1px solid var(--line);
-  border-radius: 13px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.12);
-}
-#searchResults .mod {
-  cursor: pointer;
-  transition: border-color .18s, transform .18s, background .18s;
-}
-#searchResults .mod:hover {
-  border-color: #568b68;
-  background: var(--surface-3);
-  transform: translateY(-2px);
-}
-#searchResults .mod b, #out .mod b { font-size: 1rem; }
-#searchResults small { display: inline-block; margin-top: 6px; color: var(--muted); line-height: 1.5; }
-.modRow {
-  display: flex;
-  gap: 10px;
-  margin: 10px 0;
-}
-.modRow input { flex: 1; min-width: 0; }
-.modRow button {
-  min-width: 44px;
-  color: #ffdede;
-  background: rgba(255,119,119,.12);
-  border-color: rgba(255,119,119,.25);
-}
-.modRow button:hover { background: rgba(255,119,119,.22); }
-.good { border-left: 4px solid var(--accent-strong); }
-.depColor { border-left: 4px solid var(--orange); background: rgba(255,184,107,.07); }
-.warnColor { border-left: 4px solid var(--red); background: rgba(255,119,119,.07); }
-.fallbackDepColor { border-left: 4px solid var(--purple); background: rgba(197,154,255,.08); }
-.tree-good { color: var(--accent); }
-.tree-dep { color: var(--orange); font-weight: 700; }
-.tree-warn { color: var(--red); font-weight: 700; }
-.tree-fallback-dep { color: var(--purple); font-weight: 700; }
-input.warnInput {
-  border-color: var(--red);
-  background: rgba(255,119,119,.08);
-}
-.fileBox {
-  width: 100%;
-  max-width: 1040px;
-  padding: 20px;
-  margin: 12px auto;
-  background: rgba(18,26,23,.72);
-  border: 1px dashed #496052;
-  border-radius: var(--radius);
-}
-.fileBox small { display: inline-block; margin-top: 10px; color: var(--muted); }
-#txtInput { max-width: 100%; }
-#out .mod button { margin-top: 12px; }
-#out > hr { margin: 20px 0 10px; }
-#treeView {
-  padding: 18px;
-  background: rgba(18,26,23,.72);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  line-height: 1.8;
-  overflow-x: auto;
-}
-@media (max-width: 640px) {
-  body { padding: 28px 15px 48px; }
-  body > h1 { font-size: 2.15rem; }
-  body > label { display: block; margin-top: 18px; }
-  body > select { width: 100%; margin: 0 0 8px; }
-  #searchBox { width: 100%; margin: 5px 0 8px; }
-  #searchBox + button { width: 100%; }
-  .modRow { align-items: stretch; }
-  .modRow input { width: 100%; }
-  .fileBox { padding: 15px; }
-}
-#promoBanner,
-#promoBannerClassic {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    position: relative;
-    z-index: 99999;
-    min-width: 0;
-    margin: 15px 0 24px;
-}
-.promoRow {
-    display: flex;
-    align-items: stretch;
-    justify-content: center;
-    gap: 12px;
-    width: calc(100% - 36px);
-    max-width: 900px;
-    margin: 15px auto 24px;
-}
-.promoRow #promoBannerClassic {
-    flex: 0 0 auto;
-    width: auto;
-}
-.promoRow #promoBanner {
-    flex: 1 1 auto;
-    width: auto;
-    max-width: none;
-}
-@media (max-width: 640px) {
-    .promoRow {
-        flex-direction: column;
-        gap: 0;
-    }
-    .promoRow #promoBanner,
-    .promoRow #promoBannerClassic {
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Modrinth Modpack Builder Pro</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b100f;
+        --surface: #121a17;
+        --surface-2: #18231e;
+        --surface-3: #202d27;
+        --line: #2a3a32;
+        --text: #edf5ef;
+        --muted: #9aaca1;
+        --accent: #8be0a6;
+        --accent-strong: #53c77c;
+        --orange: #ffb86b;
+        --red: #ff7777;
+        --purple: #c59aff;
+        --radius: 16px;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system,
+          BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        width: min(100% - 40px, 1040px);
+        margin: 0 auto;
+        min-height: 100vh;
+        padding: 42px 0 64px;
+        color: var(--text);
+        background: radial-gradient(
+            ellipse at 12% 0%,
+            rgba(83, 199, 124, 0.13),
+            transparent 36rem
+          ),
+          radial-gradient(
+            ellipse at 92% 8%,
+            rgba(129, 91, 190, 0.1),
+            transparent 32rem
+          ),
+          var(--bg);
+      }
+      body > h1 {
+        margin: 0 0 10px;
+        font-size: clamp(2rem, 4vw, 3rem);
+        letter-spacing: -0.055em;
+        line-height: 1.08;
+      }
+      body > h1:after {
+        content: "Build, check and collect your Modrinth mods in one place.";
+        display: block;
+        margin-top: 13px;
+        color: var(--muted);
+        font-size: 1rem;
+        font-weight: 450;
+        letter-spacing: 0;
+      }
+      body > label {
+        display: inline-block;
+        margin: 28px 0 8px;
+        color: var(--muted);
+        font-size: 0.86rem;
+        font-weight: 650;
+      }
+      body > select {
+        margin-right: 18px;
+      }
+      select,
+      input,
+      button,
+      textarea {
+        font: inherit;
+      }
+      input,
+      select,
+      textarea {
+        min-height: 44px;
+        padding: 10px 13px;
+        color: var(--text);
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        outline: none;
+        transition: 0.18s;
+      }
+      input:focus,
+      select:focus,
+      textarea:focus {
+        border-color: var(--accent-strong);
+        box-shadow: 0 0 0 3px rgba(83, 199, 124, 0.15);
+      }
+      input::placeholder,
+      textarea::placeholder {
+        color: #73877b;
+      }
+      button {
+        min-height: 42px;
+        padding: 10px 16px;
+        color: #08130c;
+        background: var(--accent);
+        border: 1px solid transparent;
+        border-radius: 10px;
+        font-weight: 750;
+        cursor: pointer;
+        transition: transform 0.16s, background 0.16s, box-shadow 0.16s;
+      }
+      button:hover {
+        background: #a5edb9;
+        transform: translateY(-1px);
+        box-shadow: 0 7px 20px rgba(83, 199, 124, 0.14);
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: wait;
+        transform: none;
+        box-shadow: none;
+      }
+      .secondaryBtn {
+        color: var(--text);
+        background: var(--surface-3);
+        border-color: var(--line);
+      }
+      .dangerBtn {
+        color: #ffdede;
+        background: rgba(255, 119, 119, 0.12);
+        border-color: rgba(255, 119, 119, 0.25);
+      }
+      hr {
         width: 100%;
-        margin: 6px 0;
-    }
-}
-.brandMark { max-width: 1040px; margin: 0 auto 14px; color: var(--accent); font-size: .72rem; font-weight: 850; letter-spacing: .17em; }\n.brandDot { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 14px rgba(139,224,166,.7); vertical-align: 1px; }\n
-/* Classic version navigation */
-.classic-nav {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  width: fit-content;
-  margin: 0 0 24px 0;
-  padding: 10px 15px;
-  color: var(--text);
-  background: linear-gradient(135deg, #1b2922, #121a17);
-  border: 1px solid #3b5947;
-  border-radius: 11px;
-  box-shadow: 0 5px 18px rgba(0, 0, 0, .22);
-  font-size: .88rem;
-  font-weight: 750;
-  line-height: 1.2;
-  text-decoration: none;
-  transition: color .18s ease, background .18s ease, border-color .18s ease,
-              box-shadow .18s ease, transform .18s ease;
-}
-.classic-nav:hover {
-  color: #08130c;
-  background: var(--accent);
-  border-color: var(--accent);
-  box-shadow: 0 7px 22px rgba(83, 199, 124, .2);
-  transform: translateY(-2px);
-}
-.classic-nav-icon {
-  color: var(--accent);
-  font-size: 1.05rem;
-  transition: color .18s ease, transform .18s ease;
-}
-.classic-nav:hover .classic-nav-icon { color: #08130c; transform: translateX(-2px); }
-.classic-nav-arrow { opacity: .7; font-size: .8rem; }
-@media (max-width: 640px) {
-  .classic-nav { margin-bottom: 20px; }
-}
-
-</style>
+        margin: 30px 0;
+        border: 0;
+        border-top: 1px solid rgba(154, 172, 161, 0.16);
+      }
+      h3 {
+        margin: 30px 0 14px;
+        font-size: 1.15rem;
+        letter-spacing: -0.02em;
+      }
+      #searchBox {
+        width: min(650px, calc(100% - 115px));
+      }
+      #searchResults,
+      #modList,
+      #out,
+      #treeView {
+        width: 100%;
+        margin-top: 14px;
+      }
+      #searchResults:empty,
+      #out:empty,
+      #treeView:empty {
+        display: none;
+      }
+      .mod {
+        padding: 16px 18px;
+        margin: 11px 0;
+        background: linear-gradient(
+          145deg,
+          rgba(24, 35, 30, 0.98),
+          rgba(18, 26, 23, 0.98)
+        );
+        border: 1px solid var(--line);
+        border-radius: 13px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      }
+      #searchResults .mod {
+        cursor: pointer;
+        transition: 0.18s;
+      }
+      #searchResults .mod:hover {
+        border-color: #568b68;
+        background: var(--surface-3);
+        transform: translateY(-2px);
+      }
+      #searchResults small {
+        display: inline-block;
+        margin-top: 6px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      .modRow {
+        display: flex;
+        gap: 10px;
+        margin: 10px 0;
+      }
+      .modRow input {
+        flex: 1;
+        min-width: 0;
+      }
+      .modRow button {
+        min-width: 44px;
+      }
+      .good {
+        border-left: 4px solid var(--accent-strong);
+      }
+      .depColor {
+        border-left: 4px solid var(--orange);
+        background: rgba(255, 184, 107, 0.07);
+      }
+      .warnColor {
+        border-left: 4px solid var(--red);
+        background: rgba(255, 119, 119, 0.07);
+      }
+      .fallbackDepColor {
+        border-left: 4px solid var(--purple);
+        background: rgba(197, 154, 255, 0.08);
+      }
+      .tree-good {
+        color: var(--accent);
+      }
+      .tree-dep {
+        color: var(--orange);
+        font-weight: 700;
+      }
+      .tree-warn {
+        color: var(--red);
+        font-weight: 700;
+      }
+      .tree-fallback-dep {
+        color: var(--purple);
+        font-weight: 700;
+      }
+      .fileBox {
+        width: 100%;
+        padding: 20px;
+        margin: 12px auto;
+        background: rgba(18, 26, 23, 0.72);
+        border: 1px dashed #496052;
+        border-radius: var(--radius);
+      }
+      .fileBox small {
+        display: inline-block;
+        margin-top: 10px;
+        color: var(--muted);
+      }
+      #txtInput {
+        max-width: 100%;
+      }
+      #out .mod button {
+        margin-top: 12px;
+      }
+      #treeView {
+        padding: 18px;
+        background: rgba(18, 26, 23, 0.72);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        line-height: 1.8;
+        overflow-x: auto;
+      }
+      .advanced {
+        margin: 14px 0;
+        padding: 15px 17px;
+        background: rgba(18, 26, 23, 0.58);
+        border: 1px solid var(--line);
+        border-radius: 13px;
+      }
+      .advanced summary {
+        cursor: pointer;
+        color: var(--accent);
+        font-weight: 750;
+      }
+      .advanced textarea {
+        display: block;
+        width: 100%;
+        min-height: 135px;
+        margin: 13px 0 10px;
+        resize: vertical;
+        line-height: 1.55;
+      }
+      .hint,
+      .downloadMeta {
+        color: var(--muted);
+        font-size: 0.88rem;
+        line-height: 1.5;
+      }
+      .status {
+        margin: 12px 0;
+        padding: 11px 14px;
+        color: var(--muted);
+        font-size: 0.88rem;
+        background: rgba(18, 26, 23, 0.7);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+      .status:empty {
+        display: none;
+      }
+      .actionRow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .searchHeader {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin: 14px 0 8px;
+      }
+      .searchHeader strong {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      .promoRow {
+        display: flex;
+        align-items: stretch;
+        justify-content: center;
+        gap: 12px;
+        width: calc(100% - 36px);
+        max-width: 900px;
+        margin: 15px auto 24px;
+      }
+      #promoBanner,
+      #promoBannerClassic {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: relative;
+        z-index: 99999;
+        min-width: 0;
+        margin: 15px 0 24px;
+      }
+      .promoRow #promoBannerClassic {
+        flex: 0 0 auto;
+        width: auto;
+      }
+      .promoRow #promoBanner {
+        flex: 1 1 auto;
+        width: auto;
+        max-width: none;
+      }
+      .brandMark {
+        max-width: 1040px;
+        margin: 0 auto 14px;
+        color: var(--accent);
+        font-size: 0.72rem;
+        font-weight: 850;
+        letter-spacing: 0.17em;
+      }
+      .brandDot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        margin-right: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 14px rgba(139, 224, 166, 0.7);
+        vertical-align: 1px;
+      }
+      @media (max-width: 640px) {
+        body {
+          padding: 28px 15px 48px;
+        }
+        body > h1 {
+          font-size: 2.15rem;
+        }
+        body > label {
+          display: block;
+          margin-top: 18px;
+        }
+        body > select {
+          width: 100%;
+          margin: 0 0 8px;
+        }
+        #searchBox {
+          width: 100%;
+          margin: 5px 0 8px;
+        }
+        #searchBox + button {
+          width: 100%;
+        }
+        .modRow {
+          align-items: stretch;
+        }
+        .modRow input {
+          width: 100%;
+        }
+        .fileBox {
+          padding: 15px;
+        }
+        .promoRow {
+          flex-direction: column;
+          gap: 0;
+        }
+        .promoRow #promoBanner,
+        .promoRow #promoBannerClassic {
+          width: 100%;
+          margin: 6px 0;
+        }
+        .searchHeader {
+          align-items: flex-start;
+        }
+        .searchHeader button {
+          white-space: nowrap;
+        }
+      }
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Audiowide&display=swap"
       rel="stylesheet"
     />
-</head>
-
-<body>
-<div class="promoRow">
-<div id="promoBanner" style="
-    background-color: rgba(67, 17, 85, 0.95);
-    border: 2px solid #ff99ff;
-    border-radius: 12px;
-    padding: 12px 20px;
-    color: white;
-    font-family: 'Audiowide', sans-serif;
-    font-size: 14px;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-items: center;
-    gap: 10px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-">
-    <span>Built by Philipiocmd — Check out my other projects at</span>
-    <a href="https://philipiocmd.github.io"
-       target="_blank"
-       rel="noopener noreferrer"
-       style="color:#ff99ff;text-decoration:underline;">
-       philipiocmd.github.io ↗
-    </a>
-</div>
-<div id="promoBannerClassic" style="
-    background: linear-gradient(145deg, #18231e, #121a17);
-    padding: 12px 20px;
-    color: #edf5ef;
-    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-    font-size: 14px;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-items: center;
-    gap: 10px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
-">
-    <a href="./classic.html"
-       rel="noopener noreferrer"
-       style="
-         display: inline-flex;
-         align-items: center;
-         justify-content: center;
-         gap: 8px;
-         padding: 10px 16px;
-         color: #08130c;
-         background: #8be0a6;
-         border: 1px solid #53c77c;
-         border-radius: 10px;
-         font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-         font-size: 14px;
-         font-weight: 750;
-         line-height: 1.2;
-         text-decoration: none;
-         box-shadow: 0 4px 12px rgba(83, 199, 124, 0.14);
-       ">
-       Classic Version ↗
-    </a>
-</div>
-</div>
-
-
-<div class="brandMark"><span class="brandDot"></span> MODRINTH TOOLKIT</div><h1>Modrinth Modpack Builder Pro</h1>
-
-<label>Minecraft Version:</label>
-<select id="mcVersion"></select>
-
-<label>Loader:</label>
-<select id="loader"></select>
-
-<hr>
-
-<h3>Search Mods</h3>
-<input id="searchBox" placeholder="Search Modrinth...">
-<button onclick="searchMods()">Search</button>
-<div id="searchResults"></div>
-
-<hr>
-<hr>
-
-<h3>📄 Import TXT</h3>
-<div class="fileBox">
-    <input type="file" id="txtInput" accept=".txt">
-    <button onclick="loadTxtFile()">Load TXT File</button><br>
-    <small>One Modrinth link per line</small>
-</div>
-
-<hr>
-<h3>Mods</h3>
-<div id="modList"></div>
-<button onclick="addMod()">+ Add Mod</button>
-
-<br><br>
-
-<h3>Actions</h3>
-<button onclick="scan()">Scan Mods</button>
-<button onclick="downloadAll()">Download</button>
-<button onclick="exportTxt()">Export Mods (.txt)</button>
-
-<div id="out"></div>
-
-<h3>Dependency Tree</h3>
-<div id="treeView"></div>
-
-<script>
-
-let mods = [];
-let processed = new Set();
-let dependencyTree = {};
-
-/* ---------------- VERSION ---------------- */
-
-function versionToNum(v) {
-    const m = v.match(/(\d+)\.(\d+)(?:\.(\d+))?/);
-    if (!m) return 0;
-    return parseInt(m[1])*1e6 + parseInt(m[2])*1e3 + parseInt(m[3]||0);
-}
-
-/* ---------------- INIT ---------------- */
-
-async function init() {
-
-    const [v, l] = await Promise.all([
-        fetch("https://api.modrinth.com/v2/tag/game_version"),
-        fetch("https://api.modrinth.com/v2/tag/loader")
-    ]);
-
-    const versions = await v.json();
-    const loaders = await l.json();
-
-    const mc = document.getElementById("mcVersion");
-    const loader = document.getElementById("loader");
-
-    loaders.forEach(x => {
-        const o = document.createElement("option");
-        o.value = x.name;
-        o.textContent = x.name;
-        loader.appendChild(o);
-    });
-
-    loader.value = "fabric";
-
-    versions.forEach(v => {
-        const o = document.createElement("option");
-        o.value = v.version;
-        o.textContent = v.version;
-        mc.appendChild(o);
-    });
-}
-
-init();
-
-/* ---------------- ADD MOD ---------------- */
-
-function addMod(val="", manual=false) {
-
-    const d = document.createElement("div");
-    d.className = "modRow";
-
-    const warn = manual ? "warnInput" : "";
-
-    d.innerHTML = `
-        <input class="${warn}" value="${val}" placeholder="Modrinth URL">
-        <button onclick="this.parentElement.remove()">X</button>
-    `;
-
-    document.getElementById("modList").appendChild(d);
-}
-
-addMod();
-
-/* ---------------- SEARCH ---------------- */
-
-async function searchMods() {
-
-    const q = document.getElementById("searchBox").value.trim();
-    if (!q) return;
-
-    const mc = document.getElementById("mcVersion").value;
-    const loader = document.getElementById("loader").value;
-
-    const facets = encodeURIComponent(JSON.stringify([
-        ["project_type:mod"],
-        [`versions:${mc}`],
-        [`categories:${loader}`]
-    ]));
-
-    const res = await fetch(
-        `https://api.modrinth.com/v2/search?query=${encodeURIComponent(q)}&facets=${facets}`
-    );
-
-    const data = await res.json();
-    renderSearch(data.hits || []);
-}
-
-function renderSearch(list) {
-
-    const box = document.getElementById("searchResults");
-    box.innerHTML = "";
-
-    list.forEach(mod => {
-
-        const div = document.createElement("div");
-        div.className = "mod";
-
-        div.innerHTML = `<b>${mod.title}</b><br><small>${mod.description || ""}</small>`;
-
-        div.onclick = () => addMod(`https://modrinth.com/mod/${mod.slug}`, true);
-
-        box.appendChild(div);
-    });
-}
-
-/* ---------------- CORE ---------------- */
-
-function getSlug(url) {
-    try {
-        return new URL(url).pathname.split("/").filter(Boolean).pop();
-    } catch {
-        return url;
-    }
-}
-
-async function fetchVersions(id) {
-    const r = await fetch(`https://api.modrinth.com/v2/project/${id}/version`);
-    return await r.json();
-}
-
-/* ---------------- PROCESS ---------------- */
-
-async function process(input, mc, loader, dependency=false, parent=null) {
-
-    const id = getSlug(input);
-    if (processed.has(id)) return;
-    processed.add(id);
-
-    const all = await fetchVersions(id);
-    if (!all?.length) return;
-
-    const mcNum = versionToNum(mc);
-
-    const filtered = all.filter(v =>
-        v.loaders?.includes(loader)
-    );
-
-    /* EXACT MATCH FIRST */
-    const exact = filtered.find(v =>
-        v.game_versions?.includes(mc)
-    );
-
-    /* FALLBACK ONLY LOWER VERSIONS */
-    const fallback = filtered
-        .filter(v =>
-            (v.game_versions || []).some(g => versionToNum(g) < mcNum)
-        )
-        .sort((a, b) =>
-            Math.max(...(b.game_versions||[]).map(versionToNum)) -
-            Math.max(...(a.game_versions||[]).map(versionToNum))
-        )[0];
-
-    const chosen = exact || fallback || all[0];
-    if (!chosen) return;
-
-    const file = chosen.files?.find(f => f.primary) || chosen.files?.[0];
-    if (!file) return;
-
-    const node = chosen.name;
-
-    const usedFallback = !exact;
-
-    let type =
-        dependency && usedFallback ? "fallbackDependency" :
-        dependency ? "dependency" :
-        usedFallback ? "warn" :
-        "good";
-
-    if (!dependencyTree[node]) {
-        dependencyTree[node] = {
-            children: [],
-            type
+  </head>
+  <body>
+    <div class="promoRow">
+      <div
+        id="promoBanner"
+        style="
+          background-color: rgba(67, 17, 85, 0.95);
+          border: 2px solid #ff99ff;
+          border-radius: 12px;
+          padding: 12px 20px;
+          color: white;
+          font-family: 'Audiowide', sans-serif;
+          font-size: 14px;
+          flex-wrap: wrap;
+          justify-content: center;
+          align-items: center;
+          gap: 10px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        "
+      >
+        <span>Built by Philipiocmd — Check out my other projects at</span
+        ><a
+          href="https://philipiocmd.github.io"
+          target="_blank"
+          rel="noopener noreferrer"
+          style="color: #ff99ff; text-decoration: underline"
+          >philipiocmd.github.io ↗</a
+        >
+      </div>
+      <div
+        id="promoBannerClassic"
+        style="
+          background: linear-gradient(145deg, #18231e, #121a17);
+          padding: 12px 20px;
+          color: #edf5ef;
+          font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+          font-size: 14px;
+          flex-wrap: wrap;
+          justify-content: center;
+          align-items: center;
+          gap: 10px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+        "
+      >
+        <a
+          href="./classic.html"
+          rel="noopener noreferrer"
+          style="
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            color: #08130c;
+            background: #8be0a6;
+            font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+            font-size: 14px;
+            font-weight: 750;
+            line-height: 1.2;
+            text-decoration: none;
+          "
+          >Classic Version ↗</a
+        >
+      </div>
+    </div>
+    <div class="brandMark"><span class="brandDot"></span> MODRINTH TOOLKIT</div>
+    <h1>Modrinth Modpack Builder Pro</h1>
+    <label>Minecraft Version:</label
+    ><select id="mcVersion"></select>
+    <label>Loader:</label
+    ><select id="loader"></select>
+    <hr />
+    <h3>Search Mods</h3>
+    <input id="searchBox" placeholder="Search Modrinth..." /><button
+      id="searchButton"
+    >
+      Search
+    </button>
+    <div id="searchResults"></div>
+    <details class="advanced">
+      <summary>Advanced Add — paste multiple mods</summary>
+      <p class="hint">
+        Paste Modrinth links, project IDs or slugs below. Put one mod on each
+        line.
+      </p>
+      <textarea
+        id="bulkInput"
+        placeholder="https://modrinth.com/mod/sodium&#10;https://modrinth.com/mod/lithium&#10;P7dR8mSH"
+      ></textarea
+      ><button id="bulkAddButton">Add Mods</button>
+    </details>
+    <hr />
+    <h3>📄 Import TXT</h3>
+    <div class="fileBox">
+      <input type="file" id="txtInput" accept=".txt,text/plain" /><button
+        id="loadTxtButton"
+      >
+        Load TXT File</button
+      ><br /><small>One Modrinth link or project ID per line</small>
+    </div>
+    <hr />
+    <h3>Mods</h3>
+    <div id="modList"></div>
+    <button id="addModButton">+ Add Mod</button><br /><br />
+    <h3>Actions</h3>
+    <div class="actionRow">
+      <button id="scanButton">Scan Mods</button
+      ><button id="downloadAllButton">Download All</button
+      ><button id="zipButton">Download ZIP</button
+      ><button id="exportButton">Export Mods (.txt)</button>
+    </div>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+    <div id="out"></div>
+    <h3>Dependency Tree</h3>
+    <div id="treeView"></div>
+    <script>
+      "use strict";
+      let mods = [],
+        processed = new Set(),
+        dependencyTree = {},
+        scanning = false;
+      const API = "https://api.modrinth.com/v2",
+        $ = (id) => document.getElementById(id);
+      function status(t) {
+        $("status").textContent = t || "";
+      }
+      function versionNum(v) {
+        const m = String(v).match(/(\d+)\.(\d+)(?:\.(\d+))?/);
+        return m ? +m[1] * 1e6 + +m[2] * 1e3 + +(m[3] || 0) : 0;
+      }
+      async function api(url) {
+        const r = await fetch(url);
+        if (!r.ok) throw Error("Modrinth API returned " + r.status);
+        return r.json();
+      }
+      async function init() {
+        try {
+          const [vs, ls] = await Promise.all([
+            api(API + "/tag/game_version"),
+            api(API + "/tag/loader"),
+          ]);
+          vs.forEach((v) => {
+            let o = document.createElement("option");
+            o.value = o.textContent = v.version;
+            $("mcVersion").append(o);
+          });
+          ls.forEach((v) => {
+            let o = document.createElement("option");
+            o.value = o.textContent = v.name;
+            $("loader").append(o);
+          });
+          $("loader").value = "fabric";
+          const preferred = ["26.2", "26.1", "1.21.11"];
+          for (const v of preferred)
+            if ([...$("mcVersion").options].some((o) => o.value === v)) {
+              $("mcVersion").value = v;
+              break;
+            }
+        } catch (e) {
+          status(
+            "Couldn't load version/loader lists from Modrinth. Refresh to retry. " +
+              e.message
+          );
+        }
+      }
+      function addMod(value = "", manual = false) {
+        const row = document.createElement("div");
+        row.className = "modRow";
+        const input = document.createElement("input");
+        input.value = value;
+        input.placeholder = "Modrinth URL, project ID or slug";
+        if (manual) input.classList.add("warnInput");
+        const btn = document.createElement("button");
+        btn.className = "dangerBtn";
+        btn.type = "button";
+        btn.textContent = "×";
+        btn.title = "Remove mod";
+        btn.onclick = () => row.remove();
+        row.append(input, btn);
+        $("modList").append(row);
+      }
+      function projectKey(s) {
+        s = s.trim();
+        if (!s) return "";
+        try {
+          if (/^https?:\/\//i.test(s)) {
+            const u = new URL(s);
+            if (!/(^|\.)modrinth\.com$/i.test(u.hostname)) return "";
+            const p = u.pathname.split("/").filter(Boolean);
+            return p[0] === "mod" ? p[1] || "" : p.at(-1) || "";
+          }
+        } catch {
+          return "";
+        }
+        return s.replace(/^\/+|\/+$/g, "");
+      }
+      function bulkAdd() {
+        const lines = $("bulkInput")
+          .value.split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter((s) => s && !s.startsWith("#"));
+        if (!lines.length)
+          return status("Paste at least one mod link or project ID first.");
+        lines.forEach((s) => addMod(s, true));
+        $("bulkInput").value = "";
+        status(
+          `Added ${lines.length} mod entr${lines.length === 1 ? "y" : "ies"}.`
+        );
+      }
+      async function searchMods() {
+        const q = $("searchBox").value.trim();
+        if (!q) return status("Type a mod name to search for.");
+        const b = $("searchButton");
+        b.disabled = true;
+        b.textContent = "Searching…";
+        $("searchResults").innerHTML = "";
+        try {
+          const facets = encodeURIComponent(
+            JSON.stringify([
+              ["project_type:mod"],
+              [`versions:${$("mcVersion").value}`],
+              [`categories:${$("loader").value}`],
+            ])
+          );
+          const d = await api(
+            `${API}/search?query=${encodeURIComponent(
+              q
+            )}&facets=${facets}&limit=30`
+          );
+          renderSearch(d.hits || []);
+          status(`Found ${(d.hits || []).length} matching projects.`);
+        } catch (e) {
+          status("Modrinth search failed: " + e.message);
+        } finally {
+          b.disabled = false;
+          b.textContent = "Search";
+        }
+      }
+      function renderSearch(list) {
+        const box = $("searchResults");
+        box.innerHTML = "";
+        const head = document.createElement("div");
+        head.className = "searchHeader";
+        const label = document.createElement("strong");
+        label.textContent = `${list.length} search results`;
+        const close = document.createElement("button");
+        close.className = "secondaryBtn";
+        close.textContent = "Close results";
+        close.onclick = () => box.replaceChildren();
+        head.append(label, close);
+        box.append(head);
+        list.forEach((p) => {
+          const card = document.createElement("div");
+          card.className = "mod";
+          const title = document.createElement("b");
+          title.textContent = p.title || p.slug;
+          const desc = document.createElement("small");
+          desc.textContent = p.description || "No description available.";
+          card.append(title, document.createElement("br"), desc);
+          card.onclick = () => {
+            addMod("https://modrinth.com/mod/" + p.slug, true);
+            status("Added " + (p.title || p.slug) + ".");
+          };
+          box.append(card);
+        });
+      }
+      async function process(
+        input,
+        mc,
+        loader,
+        dependency = false,
+        parent = null
+      ) {
+        const key = projectKey(input);
+        if (!key) return;
+        let project;
+        try {
+          project = await api(API + "/project/" + encodeURIComponent(key));
+        } catch (e) {
+          console.warn("Project lookup failed", key, e);
+          return;
+        }
+        const id = project.id;
+        if (!id || processed.has(id)) return;
+        processed.add(id);
+        const all = await api(
+          API + "/project/" + encodeURIComponent(id) + "/version"
+        );
+        const candidates = all.filter((v) =>
+          (v.loaders || []).includes(loader)
+        );
+        const exact = candidates.find((v) =>
+          (v.game_versions || []).includes(mc)
+        );
+        const fallback = candidates
+          .filter((v) =>
+            (v.game_versions || []).some((g) => versionNum(g) < versionNum(mc))
+          )
+          .sort(
+            (a, b) =>
+              Math.max(0, ...(b.game_versions || []).map(versionNum)) -
+              Math.max(0, ...(a.game_versions || []).map(versionNum))
+          )[0];
+        const chosen = exact || fallback;
+        if (!chosen) return;
+        const file = chosen.files?.find((f) => f.primary) || chosen.files?.[0];
+        if (!file) return;
+        const old = !exact;
+        const name = `${project.slug || key}-${
+          chosen.version_number || chosen.id
+        }`;
+        const type = dependency
+          ? old
+            ? "fallbackDependency"
+            : "dependency"
+          : old
+          ? "warn"
+          : "good";
+        dependencyTree[id] = {
+          name,
+          children: dependencyTree[id]?.children || [],
+          type,
         };
-    }
-
-    if (parent) {
-        if (!dependencyTree[parent]) {
-            dependencyTree[parent] = {
-                children: [],
-                type: "good"
-            };
-        }
-
-        if (!dependencyTree[parent].children.includes(node)) {
-            dependencyTree[parent].children.push(node);
-        }
-    }
-
-    if (!mods.some(m => m.projectId === chosen.project_id)) {
-        mods.push({
-            projectId: chosen.project_id,
-            slug: id,
-            name: chosen.name,
+        if (
+          parent &&
+          dependencyTree[parent] &&
+          !dependencyTree[parent].children.includes(id)
+        )
+          dependencyTree[parent].children.push(id);
+        if (!mods.some((m) => m.projectId === id))
+          mods.push({
+            projectId: id,
+            slug: project.slug || key,
+            projectName: project.title || project.slug || key,
+            name,
+            versionNumber: chosen.version_number || chosen.id,
             url: file.url,
+            filename: file.filename || name + ".jar",
             dependency,
             compatible: !!exact,
-            fallback: usedFallback
+            fallback: old,
+          });
+        for (const dep of chosen.dependencies || []) {
+          if (dep.dependency_type !== "required") continue;
+          let depId = dep.project_id;
+          if (!depId && dep.version_id) {
+            try {
+              depId = (
+                await api(
+                  API + "/version/" + encodeURIComponent(dep.version_id)
+                )
+              ).project_id;
+            } catch {}
+          }
+          if (depId) await process(depId, mc, loader, true, id);
+        }
+      }
+      async function scan() {
+        if (scanning) return;
+        const inputs = [...document.querySelectorAll(".modRow input")]
+          .map((x) => x.value.trim())
+          .filter(Boolean);
+        if (!inputs.length)
+          return status("Add at least one Modrinth project before scanning.");
+        scanning = true;
+        $("scanButton").disabled = true;
+        $("scanButton").textContent = "Scanning…";
+        mods = [];
+        processed.clear();
+        dependencyTree = {};
+        $("out").innerHTML = "";
+        $("treeView").innerHTML = "";
+        try {
+          for (let i = 0; i < inputs.length; i++) {
+            try {
+              await process(inputs[i], $("mcVersion").value, $("loader").value);
+            } catch (e) {
+              console.warn("Scan failed", inputs[i], e);
+            }
+            status(
+              `Scanning… ${i + 1}/${inputs.length} inputs processed. Found ${
+                mods.length
+              } mods including dependencies.`
+            );
+          }
+          render();
+          renderTree();
+          status(
+            `Scan complete: ${mods.length} mod${
+              mods.length === 1 ? "" : "s"
+            } found.`
+          );
+        } finally {
+          scanning = false;
+          $("scanButton").disabled = false;
+          $("scanButton").textContent = "Scan Mods";
+        }
+      }
+      function render() {
+        const out = $("out");
+        out.innerHTML = "";
+        if (!mods.length) {
+          out.textContent =
+            "No matching versions were found for the selected Minecraft version and loader.";
+          return;
+        }
+        mods.forEach((m) => {
+          const card = document.createElement("div");
+          card.className =
+            "mod " +
+            (m.dependency && m.fallback
+              ? "fallbackDepColor"
+              : m.dependency
+              ? "depColor"
+              : !m.compatible
+              ? "warnColor"
+              : "good");
+          const title = document.createElement("b");
+          title.textContent = m.name;
+          const info = document.createElement("div");
+          info.className = "downloadMeta";
+          info.textContent =
+            (m.dependency
+              ? m.fallback
+                ? "Dependency · Fallback"
+                : "Dependency"
+              : m.compatible
+              ? "Compatible"
+              : "Fallback version") +
+            " · " +
+            m.filename;
+          const btn = document.createElement("button");
+          btn.textContent = "Download";
+          btn.onclick = () => downloadOne(m, btn);
+          card.append(title, document.createElement("br"), info, btn);
+          out.append(card);
         });
-    }
-
-    if (chosen.dependencies) {
-        for (const dep of chosen.dependencies) {
-            if (dep.dependency_type !== "required") continue;
-            if (!dep.project_id) continue;
-
-            await process(dep.project_id, mc, loader, true, node);
+        const hr = document.createElement("hr");
+        out.append(hr, document.createTextNode("Total: " + mods.length));
+      }
+      function treeNode(id, depth = 0, seen = new Set()) {
+        if (seen.has(id)) return "";
+        seen.add(id);
+        const n = dependencyTree[id] || {
+          name: id,
+          children: [],
+          type: "good",
+        };
+        const cls =
+          n.type === "fallbackDependency"
+            ? "tree-fallback-dep"
+            : n.type === "dependency"
+            ? "tree-dep"
+            : n.type === "warn"
+            ? "tree-warn"
+            : "tree-good";
+        let html = `<div class="${cls}" style="margin-left:${depth * 20}px">${
+          depth ? "└─ " : ""
+        }${escapeHTML(n.name)}</div>`;
+        (n.children || []).forEach(
+          (c) => (html += treeNode(c, depth + 1, seen))
+        );
+        return html;
+      }
+      function escapeHTML(s) {
+        return String(s).replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            }[c])
+        );
+      }
+      function renderTree() {
+        const box = $("treeView");
+        box.innerHTML = "";
+        const children = new Set();
+        Object.values(dependencyTree).forEach((n) =>
+          (n.children || []).forEach((c) => children.add(c))
+        );
+        Object.keys(dependencyTree).forEach((id) => {
+          if (!children.has(id))
+            box.insertAdjacentHTML("beforeend", treeNode(id));
+        });
+      }
+      async function getBlob(m) {
+        const r = await fetch(m.url);
+        if (!r.ok) throw Error("Download failed: " + r.status);
+        return r.blob();
+      }
+      function save(blob, name) {
+        const url = URL.createObjectURL(blob),
+          a = document.createElement("a");
+        a.href = url;
+        a.download = name;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+      }
+      async function downloadOne(m, button) {
+        button.disabled = true;
+        button.textContent = "Downloading…";
+        try {
+          save(await getBlob(m), m.filename);
+          status("Downloaded " + m.filename);
+        } catch (e) {
+          status(
+            "Browser couldn't fetch this file directly. Opening its Modrinth download link instead."
+          );
+          window.open(m.url, "_blank", "noopener");
+        } finally {
+          button.disabled = false;
+          button.textContent = "Download";
         }
-    }
-}
-
-/* ---------------- SCAN ---------------- */
-
-async function scan() {
-
-    mods = [];
-    processed.clear();
-    dependencyTree = {};
-
-    const mc = document.getElementById("mcVersion").value;
-    const loader = document.getElementById("loader").value;
-
-    const inputs = [...document.querySelectorAll(".modRow input")]
-        .map(i => i.value.trim())
-        .filter(Boolean);
-
-    for (const i of inputs) {
-        await process(i, mc, loader);
-    }
-
-    render();
-    renderTree();
-}
-
-/* ---------------- RENDER ---------------- */
-
-function render() {
-
-    const out = document.getElementById("out");
-    out.innerHTML = "";
-
-    mods.forEach(m => {
-
-        const div = document.createElement("div");
-
-        if (m.dependency && m.fallback) {
-            div.className = "mod fallbackDepColor";
+      }
+      async function downloadAll() {
+        if (!mods.length) return status("Scan mods first.");
+        const b = $("downloadAllButton");
+        b.disabled = true;
+        b.textContent = "Downloading…";
+        let ok = 0,
+          fail = 0;
+        for (let i = 0; i < mods.length; i++) {
+          status(`Downloading ${i + 1}/${mods.length}…`);
+          try {
+            save(await getBlob(mods[i]), mods[i].filename);
+            ok++;
+          } catch (e) {
+            fail++;
+            console.warn(e);
+          }
+          await new Promise((r) => setTimeout(r, 250));
         }
-        else if (m.dependency) {
-            div.className = "mod depColor";
+        b.disabled = false;
+        b.textContent = "Download All";
+        status(
+          `Finished: ${ok} downloaded${
+            fail ? `, ${fail} failed (browser/CORS restriction)` : ""
+          }.`
+        );
+      }
+      async function downloadZip() {
+        if (!mods.length) return status("Scan mods first.");
+        if (typeof JSZip === "undefined")
+          return status(
+            "ZIP library did not load. Refresh the page and try again."
+          );
+        const b = $("zipButton");
+        b.disabled = true;
+        b.textContent = "Building ZIP…";
+        const zip = new JSZip();
+        let ok = 0,
+          failed = [];
+        try {
+          for (let i = 0; i < mods.length; i++) {
+            status(
+              `Adding to ZIP ${i + 1}/${mods.length}: ${mods[i].filename}`
+            );
+            try {
+              zip.file(mods[i].filename, await getBlob(mods[i]));
+              ok++;
+            } catch (e) {
+              failed.push(mods[i].filename);
+            }
+          }
+          if (!ok)
+            return status(
+              "No files could be added. The browser may be blocking cross-origin downloads."
+            );
+          if (failed.length)
+            zip.file(
+              "DOWNLOAD-ISSUES.txt",
+              "Could not fetch these files:\n" + failed.join("\n")
+            );
+          status("Creating ZIP…");
+          save(
+            await zip.generateAsync({
+              type: "blob",
+              compression: "DEFLATE",
+              compressionOptions: { level: 5 },
+            }),
+            "modrinth-modpack-mods.zip"
+          );
+          status(
+            `ZIP created with ${ok} files${
+              failed.length
+                ? `; ${failed.length} failed and are listed in DOWNLOAD-ISSUES.txt`
+                : ""
+            }.`
+          );
+        } catch (e) {
+          status("ZIP creation failed: " + e.message);
+        } finally {
+          b.disabled = false;
+          b.textContent = "Download ZIP";
         }
-        else if (!m.compatible) {
-            div.className = "mod warnColor";
-        }
-        else {
-            div.className = "mod good";
-        }
-
-        div.innerHTML = `
-            <b>${m.name}</b><br>
-            ${m.dependency && m.fallback ? "Dependency (Fallback)" :
-              m.dependency ? "Dependency" :
-              m.compatible ? "Compatible" : "Fallback"}<br><br>
-            <button onclick="window.open('${m.url}')">Download</button>
-        `;
-
-        out.appendChild(div);
-    });
-
-    out.innerHTML += `<hr>Total: ${mods.length}`;
-}
-
-/* ---------------- TREE ---------------- */
-
-function renderTreeNode(name, depth=0, seen=new Set()) {
-
-    if (seen.has(name)) return "";
-    seen.add(name);
-
-    const node = dependencyTree[name] || { children: [], type: "good" };
-
-    let cls =
-        node.type === "fallbackDependency" ? "tree-fallback-dep" :
-        node.type === "dependency" ? "tree-dep" :
-        node.type === "warn" ? "tree-warn" :
-        "tree-good";
-
-    let html = `
-        <div class="${cls}" style="margin-left:${depth*20}px">
-            ${depth ? "└─ " : "<b>"}${name}${depth ? "" : "</b>"}
-        </div>
-    `;
-
-    for (const child of node.children || []) {
-        html += renderTreeNode(child, depth + 1, seen);
-    }
-
-    return html;
-}
-
-function renderTree() {
-
-    const box = document.getElementById("treeView");
-    box.innerHTML = "";
-
-    const children = new Set();
-
-    Object.values(dependencyTree).forEach(n =>
-        (n.children || []).forEach(c => children.add(c))
-    );
-
-    Object.keys(dependencyTree).forEach(root => {
-        if (!children.has(root)) {
-            box.innerHTML += renderTreeNode(root);
-        }
-    });
-}
-
-/* ---------------- DOWNLOAD ---------------- */
-
-function downloadAll() {
-    mods.forEach((m,i) =>
-        setTimeout(() => window.open(m.url), i*150)
-    );
-}
-
-/* ---------------- TXT IMPORT ---------------- */
-
-function loadTxtFile() {
-
-    const file = document.getElementById("txtInput").files[0];
-
-    if (!file) {
-        alert("Select a .txt file first");
-        return;
-    }
-
-    const reader = new FileReader();
-
-    reader.onload = e => {
-
-        const lines = e.target.result
+      }
+      function loadTxt() {
+        const file = $("txtInput").files[0];
+        if (!file) return alert("Select a .txt file first");
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const lines = String(e.target.result)
             .split(/\r?\n/)
-            .map(x => x.trim())
-            .filter(line => {
-
-                if (!line) return false;
-
-                if (
-                    line.startsWith(
-                        "#Mod links with the names"
-                    )
-                ) {
-                    return false;
-                }
-
-                return true;
-            });
-
-        lines.forEach(line => addMod(line, true));
-
-        alert(`Imported ${lines.length} mods`);
-    };
-
-    reader.readAsText(file);
-}
-
-/* ---------------- TXT EXPORT ---------------- */
-
-function exportTxt() {
-
-    if (!mods.length) {
-        alert("Scan mods first.");
-        return;
-    }
-
-    const links = [
-        ...new Set(
-            mods.map(
-                m => `https://modrinth.com/mod/${m.slug}`
-            )
-        )
-    ];
-
-    const txt = [
-        "#Mod links with the names at the end are the mods downloaded. Mod links with random letters are dependencies",
-        "",
-        ...links
-    ].join("\n");
-
-    const blob = new Blob(
-        [txt],
-        { type: "text/plain" }
-    );
-
-    const a = document.createElement("a");
-
-    a.href = URL.createObjectURL(blob);
-    a.download = "modrinth-modlist.txt";
-
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-
-    URL.revokeObjectURL(a.href);
-}
-
-</script>
-
-</body>
+            .map((x) => x.trim())
+            .filter((x) => x && !x.startsWith("#"));
+          lines.forEach((x) => addMod(x, true));
+          status(
+            `Imported ${lines.length} mod entr${
+              lines.length === 1 ? "y" : "ies"
+            }.`
+          );
+          $("txtInput").value = "";
+        };
+        reader.onerror = () => status("Couldn't read that TXT file.");
+        reader.readAsText(file);
+      }
+      function exportTxt() {
+        const links = mods.length
+          ? [...new Set(mods.map((m) => "https://modrinth.com/mod/" + m.slug))]
+          : [...document.querySelectorAll(".modRow input")]
+              .map((x) => x.value.trim())
+              .filter(Boolean);
+        if (!links.length) return status("Add or scan mods before exporting.");
+        const text = [
+          "# Modrinth mod list",
+          "# Main mods and dependencies are included after scanning.",
+          "",
+          ...links,
+        ].join("\n");
+        save(
+          new Blob([text], { type: "text/plain;charset=utf-8" }),
+          "modrinth-modlist.txt"
+        );
+        status("Exported modrinth-modlist.txt");
+      }
+      $("searchButton").onclick = searchMods;
+      $("searchBox").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") searchMods();
+      });
+      $("bulkAddButton").onclick = bulkAdd;
+      $("addModButton").onclick = () => addMod();
+      $("loadTxtButton").onclick = loadTxt;
+      $("scanButton").onclick = scan;
+      $("downloadAllButton").onclick = downloadAll;
+      $("zipButton").onclick = downloadZip;
+      $("exportButton").onclick = exportTxt;
+      addMod();
+      init();
+    </script>
+  </body>
 </html>
